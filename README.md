@@ -41,17 +41,15 @@ Una interfaz web ligera y moderna para interactuar con modelos de lenguaje desde
 
 **Vista principal:**
 
-![LM Studio UI](https://via.placeholder.com/600x300.png?text=LM+Studio+-+WebChat+UI)
+<img width="1909" height="921" alt="imagen" src="https://github.com/user-attachments/assets/7a7d6b68-4ec3-4ce3-a73b-65d5707620a3" />
+
 
 **Chat en acción con streaming:**
 
-Usuario: Hola, ¿puedes explicarme qué es LM Studio?
-Asistente: Claro, LM Studio es una interfaz web para interactuar con modelos de lenguaje...
+Usuario: Saluda a un usuario de github<br>
+Asistente: ¡Hola! 👋🏼 Bienvenido/a al mundo de GitHub. ¿En qué puedo ayudarte hoy?
 
 **Adjuntar archivos y múltiples chats:**
-
-![Adjuntos y lista de chats](https://via.placeholder.com/600x200.png?text=Chats+y+Adjuntos)
-
 ---
 
 ## ⚙️ Tech stack
@@ -61,5 +59,3 @@ Asistente: Claro, LM Studio es una interfaz web para interactuar con modelos de 
 - Font Awesome 6 para íconos  
 
 ---
-
-> Listo para usar: solo abre `index.html` en tu navegador y conecta tu modelo favorito.

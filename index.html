@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LM Studio - WebChat UI</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <style>
+    :root { --bg:#1e0a3c;--fg:#fff;--panel:#2c0f4b;--msg-user:#6c2d8c;--msg-assistant:#442a6f;--btn:#8e44ad;--btn-2:#bb86fc;--radius:12px;--shadow:0 6px 24px rgba(0,0,0,.25);}
+    [data-theme="light"] {--bg:#f5f7fb;--fg:#0f172a;--panel:#e5e7eb;--msg-user:#2563eb;--msg-assistant:#d1d5db;--btn:#0ea5e9;--btn-2:#0284c7;}
+    *{box-sizing:border-box}html,body{height:100%}body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
+    header{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;padding:.75rem;background:var(--panel);box-shadow:var(--shadow)}
+    header input,header select,header button{border:none;border-radius:var(--radius);padding:.6rem .75rem;font-size:.95rem}
+    header input[type=text]{min-width:240px;background:var(--bg);color:var(--fg)}
+    header button{background:var(--btn);color:var(--fg);cursor:pointer}header button:hover{background:var(--btn-2)}
+    #status{padding:.4rem;text-align:center;font-size:.85rem}
+    main{flex:1;display:grid;grid-template-columns:280px 1fr;gap:1rem;padding:1rem}
+    aside{background:var(--panel);border-radius:var(--radius);padding:.75rem;display:flex;flex-direction:column;gap:.5rem;min-height:0}
+    aside .row{display:flex;gap:.5rem}aside button,aside select{border:none;border-radius:var(--radius);padding:.55rem .7rem;background:var(--btn);color:var(--fg);cursor:pointer}
+    aside button.secondary{background:transparent;border:1px solid rgba(255,255,255,.15)}
+    aside ul{list-style:none;margin:0;padding:0;overflow:auto;flex:1}aside li{padding:.5rem;border-radius:10px;cursor:pointer}
+    aside li.active{background:rgba(255,255,255,.1)}
+    #chat{background:linear-gradient(135deg,rgba(255,255,255,.03),transparent);border-radius:var(--radius);padding:1rem;display:flex;flex-direction:column;min-height:0}
+    #messages{flex:1;overflow:auto;display:flex;flex-direction:column;gap:.6rem}
+    .msg{max-width:80%;padding:.7rem .9rem;border-radius:14px;box-shadow:var(--shadow);word-wrap:anywhere}
+    .msg.user{align-self:flex-end;background:var(--msg-user)}.msg.assistant{align-self:flex-start;background:var(--msg-assistant)}
+    #composer{margin-top:1rem;display:grid;grid-template-columns:auto 1fr auto auto;gap:.5rem;align-items:center}
+    #composer input[type=text]{border:none;border-radius:999px;padding:.7rem 1rem;background:var(--panel);color:var(--fg)}
+    #composer button{border:none;border-radius:999px;width:44px;height:44px;display:grid;place-items:center;background:var(--btn);color:var(--fg);cursor:pointer}
+    #composer button:hover{background:var(--btn-2)}
+    .chips{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.35rem}.chip{font-size:.8rem;background:rgba(0,0,0,.2);padding:.25rem .5rem;border-radius:999px}
+    @media(max-width:900px){main{grid-template-columns:1fr}aside{order:2}#chat{order:1}}
+  </style>
+</head>
+<body>
+  <header>
+    <input id="server" type="text" value="http://localhost:1234" />
+    <select id="model" disabled><option value="">Selecciona un modelo</option></select>
+    <button id="connect"><i class="fa-solid fa-plug"></i>&nbsp;Conectar</button>
+    <select id="theme"><option value="dark">Tema oscuro</option><option value="light">Tema claro</option></select>
+  </header>
+  <div id="status">Desconectado</div>
+  <main>
+    <aside>
+      <div class="row">
+        <button id="new-chat"><i class="fa-solid fa-plus"></i>&nbsp;Nuevo</button>
+        <button id="clear-chat" class="secondary"><i class="fa-solid fa-broom"></i>&nbsp;Limpiar</button>
+      </div>
+      <ul id="chat-list"></ul>
+    </aside>
+    <section id="chat">
+      <div id="messages"></div>
+      <div class="toolbar" style="margin:.25rem 0 .5rem 0;">
+        <label class="checkbox"><input id="send-file-content" type="checkbox" checked/> Incluir archivos</label>
+        <label class="checkbox"><input id="streaming" type="checkbox" checked/> Streaming</label>
+        <button id="stop" class="secondary" style="border-radius:10px;padding:.4rem .7rem;background:transparent;border:1px solid rgba(255,255,255,.15);cursor:pointer" disabled><i class="fa-solid fa-stop"></i>&nbsp;Detener</button>
+      </div>
+      <div id="composer">
+        <button id="attach"><i class="fa-solid fa-paperclip"></i></button>
+        <input id="input" type="text" placeholder="Escribe un mensaje..." disabled />
+        <button id="send"><i class="fa-solid fa-paper-plane"></i></button>
+        <input id="file" type="file" multiple style="display:none" />
+        <div id="attached" class="chips"></div>
+      </div>
+    </section>
+  </main>
+  <script>
+    const el=id=>document.getElementById(id);
+    const ui={server:el('server'),model:el('model'),connect:el('connect'),status:el('status'),theme:el('theme'),chatList:el('chat-list'),messages:el('messages'),newChat:el('new-chat'),clearChat:el('clear-chat'),input:el('input'),send:el('send'),attach:el('attach'),file:el('file'),attached:el('attached'),streaming:el('streaming'),stop:el('stop'),sendFileContent:el('send-file-content')};
+    let isConnected=false,currentModel='',chats=[],currentChat=null,pendingFiles=[],abortController=null;
+
+    const setTheme=t=>document.documentElement.setAttribute('data-theme',t),
+          setStatus=(m,ok=false)=>{ui.status.textContent=m;ui.status.style.color=ok?'lime':'#f87171'},
+          scrollBottom=()=>ui.messages.scrollTop=ui.messages.scrollHeight;
+
+    function addMsg(c,r){
+        if(!currentChat)return;
+        const d=document.createElement('div');
+        d.className=`msg ${r}`;
+        d.textContent=c;
+        ui.messages.appendChild(d);
+        scrollBottom();
+        currentChat.messages.push({role:r,content:c});
+    }
+
+    function renderChatList(){
+        ui.chatList.innerHTML='';
+        chats.forEach(c=>{
+            const li=document.createElement('li');
+            if(currentChat&&currentChat.id===c.id)li.classList.add('active');
+            const s=document.createElement('span');
+            s.textContent=c.name||`Chat ${c.id}`;
+            s.onclick=()=>{currentChat=c;renderChat(c)};
+            const del=document.createElement('button'); del.textContent='🗑'; del.onclick=e=>{e.stopPropagation(); chats=chats.filter(x=>x.id!==c.id); if(currentChat?.id===c.id){currentChat=null; ui.messages.innerHTML=''} renderChatList()};
+            const save=document.createElement('button'); save.textContent='💾'; save.onclick=e=>{e.stopPropagation(); const b=new Blob([JSON.stringify(c,null,2)],{type:'application/json'}); const u=URL.createObjectURL(b); const a=document.createElement('a'); a.href=u; a.download=`${c.name||'chat-'+c.id}.json`; a.click(); URL.revokeObjectURL(u)};
+            li.append(s,save,del);
+            ui.chatList.appendChild(li);
+        });
+    }
+
+    function newConversation(){const chat={id:Date.now(),name:`Chat ${chats.length+1}`,messages:[]};chats.push(chat);currentChat=chat;ui.messages.innerHTML='';renderChatList();}
+    function renderChat(chat){ui.messages.innerHTML='';chat.messages.forEach(m=>{const d=document.createElement('div'); d.className=`msg ${m.role}`; d.textContent=m.content; ui.messages.appendChild(d)});scrollBottom();renderChatList();}
+
+    async function connect(){
+        const base=ui.server.value.trim().replace(/\/$/,'');
+        if(!base)return setStatus('URL inválida');
+        if(isConnected){ // Desconectar
+            isConnected=false;
+            ui.input.disabled=true;
+            setStatus('Desconectado');
+            ui.connect.innerHTML='<i class="fa-solid fa-plug"></i>&nbsp;Conectar';
+            return;
+        }
+        setStatus('Conectando...');
+        try{
+            const r=await fetch(`${base}/v1/models`);
+            if(!r.ok)throw 0;
+            const d=await r.json();
+            if(!d?.data?.length)throw 0;
+            ui.model.innerHTML='';
+            d.data.forEach(m=>{const o=document.createElement('option');o.value=m.id;o.textContent=m.id;ui.model.appendChild(o)});
+            ui.model.disabled=false;
+            currentModel=ui.model.value;
+            isConnected=true;
+            ui.input.disabled=false;
+            setStatus('Conectado',1);
+            ui.connect.innerHTML='<i class="fa-solid fa-unplug"></i>&nbsp;Desconectar';
+        }catch(e){isConnected=false; setStatus('Fallo de conexión'); ui.connect.innerHTML='<i class="fa-solid fa-plug"></i>&nbsp;Conectar'}
+    }async function send() {
+  if (!isConnected || !currentModel) {
+    return setStatus('No conectado');
+  }
+
+  const text = ui.input.value.trim();
+  if (!text && !pendingFiles.length) {
+    return;
+  }
+
+  addMsg(text || '[Vacío]', 'user');
+  const base = ui.server.value.trim().replace(/\/$/, '');
+  const body = {
+    model: currentModel,
+    messages: [
+      { role: 'system', content: 'Eres un asistente experto.' },
+      ...(currentChat?.messages || []),
+      { role: 'user', content: text }
+    ],
+    temperature: 0.7
+  };
+
+  const live = document.createElement('div');
+  live.className = 'msg assistant';
+  ui.messages.appendChild(live);
+  scrollBottom();
+
+  ui.input.value = '';
+  ui.stop.disabled = false;
+  pendingFiles = [];
+  ui.attached.innerHTML = '';
+
+  try {
+    if (ui.streaming.checked) {
+      abortController = new AbortController();
+      const response = await fetch(`${base}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...body, stream: true }),
+        signal: abortController.signal
+      });
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const chunks = buffer.split('\n\n');
+        buffer = chunks.pop();
+
+        for (const chunk of chunks) {
+          for (const line of chunk.split('\n')) {
+            if (line.startsWith('data:')) {
+              const data = line.slice(5).trim();
+              if (data === '[DONE]') {
+                reader.cancel();
+                break;
+              }
+              try {
+                const json = JSON.parse(data);
+                const delta = json.choices?.[0]?.delta?.content || '';
+                if (delta) {
+                  live.textContent += delta;
+                  scrollBottom();
+                }
+              } catch {
+                // Ignorar parseos parciales
+              }
+            }
+          }
+        }
+      }
+      currentChat.messages.push({ role: 'assistant', content: live.textContent });
+    } else {
+      const response = await fetch(`${base}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const json = await response.json();
+      const message = json?.choices?.[0]?.message?.content || '[sin respuesta]';
+      live.textContent = message;
+      currentChat.messages.push({ role: 'assistant', content: message });
+    }
+  } catch (error) {
+    live.textContent = '[Error]';
+  } finally {
+    ui.stop.disabled = true;
+    abortController = null;
+
+    if (currentChat && currentChat.name.startsWith('Chat ')) {
+      const textSnippet = live.textContent.trim().split(/\s+/).slice(0, 6).join(' ');
+      if (textSnippet) {
+        currentChat.name = `Chat: ${textSnippet}...`;
+        renderChatList();
+      }
+    }
+  }
+}
+
+// Manejadores de eventos
+ui.connect.onclick = connect;
+ui.model.onchange = () => {
+  currentModel = ui.model.value;
+};
+ui.send.onclick = send;
+ui.input.onkeydown = (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    send();
+  }
+};
+ui.stop.onclick = () => {
+  if (abortController) {
+    abortController.abort();
+  }
+};
+ui.newChat.onclick = newConversation;
+ui.clearChat.onclick = () => {
+  if (currentChat) {
+    currentChat.messages = [];
+    ui.messages.innerHTML = '';
+  }
+};
+ui.theme.onchange = () => {
+  setTheme(ui.theme.value);
+};
+
+// Inicialización
+setTheme('dark');
+newConversation();
+  </script>
+</body>
+</html>
